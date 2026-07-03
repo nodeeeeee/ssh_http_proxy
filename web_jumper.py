@@ -531,7 +531,15 @@ HTML = r"""<!doctype html>
       }
     }
     async function selectHost(host) {
+      if (!host) {
+        selected = "";
+        $("selectedHost").textContent = "No host selected";
+        $("detail").textContent = "Select a host from ~/.ssh/config.";
+        renderHosts();
+        return;
+      }
       selected = host;
+      localStorage.setItem("ssh-http-proxy:last-host", host);
       $("selectedHost").textContent = host;
       renderHosts();
       try {
@@ -560,7 +568,8 @@ HTML = r"""<!doctype html>
       $("url").value = data.defaultUrl;
       $("port").value = data.suggestedPort;
       renderHosts();
-      await selectHost(hosts[0] || "");
+      const lastHost = localStorage.getItem("ssh-http-proxy:last-host");
+      await selectHost(lastHost && hosts.includes(lastHost) ? lastHost : "");
       setStatus(await api("/api/status"));
     }
     async function poll() {
@@ -583,7 +592,10 @@ HTML = r"""<!doctype html>
     };
     $("stop").onclick = async () => setStatus(await api("/api/stop", {}));
     $("chrome").onclick = async () => {
-      try { await api("/api/open_chrome", { url: $("url").value, host: selected, port: Number($("port").value) }); }
+      try {
+        const status = await api("/api/status");
+        await api("/api/open_chrome", { url: $("url").value, host: selected || status.host || "host", port: Number($("port").value) });
+      }
       catch (err) { alert(err.message); }
     };
     $("test").onclick = async () => {
