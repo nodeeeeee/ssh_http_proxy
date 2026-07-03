@@ -4,8 +4,12 @@ set -eu
 APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DESKTOP_DIR="${XDG_DATA_HOME:-"$HOME/.local/share"}/applications"
 DESKTOP_FILE="$DESKTOP_DIR/ssh-http-proxy.desktop"
+ICON_DIR="${XDG_DATA_HOME:-"$HOME/.local/share"}/icons/hicolor/scalable/apps"
+ICON_FILE="$ICON_DIR/ssh-http-proxy.svg"
 
 mkdir -p "$DESKTOP_DIR"
+mkdir -p "$ICON_DIR"
+cp "$APP_DIR/assets/ssh-http-proxy.svg" "$ICON_FILE"
 
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
@@ -15,8 +19,9 @@ GenericName=SSH SOCKS Proxy Launcher
 Comment=Open a SOCKS proxy through an SSH config host and launch Chrome through it
 Exec=$APP_DIR/ssh-net-jumper
 Path=$APP_DIR
+Icon=ssh-http-proxy
 Terminal=false
-Categories=Network;Utility;
+Categories=Network;
 Keywords=SSH;Proxy;SOCKS;Chrome;Tunnel;
 StartupNotify=true
 NoDisplay=false
@@ -27,5 +32,9 @@ chmod +x "$DESKTOP_FILE"
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
 fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache "${XDG_DATA_HOME:-"$HOME/.local/share"}/icons/hicolor" >/dev/null 2>&1 || true
+fi
 
 printf 'Installed desktop entry: %s\n' "$DESKTOP_FILE"
+printf 'Installed icon: %s\n' "$ICON_FILE"

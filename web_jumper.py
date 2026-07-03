@@ -685,7 +685,13 @@ def open_ui(url):
 
 
 def main():
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    try:
+        server = ThreadingHTTPServer((HOST, PORT), Handler)
+    except OSError as exc:
+        if getattr(exc, "errno", None) in (48, 98):
+            open_ui(f"http://{HOST}:{PORT}")
+            return
+        raise
     add_log(f"Web UI listening on http://{HOST}:{PORT}")
     threading.Thread(target=server.serve_forever, daemon=True).start()
     open_ui(f"http://{HOST}:{PORT}")

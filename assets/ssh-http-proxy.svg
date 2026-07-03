@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="SSH HTTP Proxy icon">
+  <defs>
+    <linearGradient id="bg" x1="30" y1="24" x2="226" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="63" y1="62" x2="193" y2="194" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dbeafe"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0f172a" flood-opacity=".26"/>
+    </filter>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <path d="M54 176c19 23 45 35 77 35 35 0 62-14 81-42" fill="none" stroke="#99f6e4" stroke-width="12" stroke-linecap="round" opacity=".55"/>
+  <path d="M42 81c20-23 47-35 80-35 36 0 65 15 86 44" fill="none" stroke="#bfdbfe" stroke-width="12" stroke-linecap="round" opacity=".55"/>
+
+  <rect x="50" y="62" width="156" height="118" rx="22" fill="url(#panel)" filter="url(#shadow)"/>
+  <rect x="50" y="62" width="156" height="34" rx="22" fill="#0f172a"/>
+  <path d="M50 84c0-12 10-22 22-22h112c12 0 22 10 22 22v12H50z" fill="#0f172a"/>
+  <circle cx="76" cy="79" r="6" fill="#ef4444"/>
+  <circle cx="96" cy="79" r="6" fill="#f59e0b"/>
+  <circle cx="116" cy="79" r="6" fill="#22c55e"/>
+
+  <path d="M82 124l24 20-24 20" fill="none" stroke="#1e293b" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M121 164h50" fill="none" stroke="#2563eb" stroke-width="13" stroke-linecap="round"/>
+
+  <circle cx="76" cy="203" r="16" fill="#ecfeff" stroke="#99f6e4" stroke-width="8"/>
+  <circle cx="180" cy="203" r="16" fill="#ecfeff" stroke="#99f6e4" stroke-width="8"/>
+  <path d="M92 203h72" fill="none" stroke="#99f6e4" stroke-width="10" stroke-linecap="round"/>
+  <path d="M164 203l-12-12m12 12l-12 12" fill="none" stroke="#0f766e" stroke-width="8" stroke-linecap="round"/>
+</svg>

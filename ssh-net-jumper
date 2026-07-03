@@ -1,3 +1,26 @@
 #!/usr/bin/env sh
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+UI_URL="${SSH_NET_JUMPER_UI_URL:-http://127.0.0.1:${SSH_NET_JUMPER_UI_PORT:-8765}}"
+
+open_url() {
+  if [ -x /opt/google/chrome/chrome ]; then
+    /opt/google/chrome/chrome --new-window "$UI_URL" >/dev/null 2>&1 &
+  elif command -v google-chrome >/dev/null 2>&1; then
+    google-chrome --new-window "$UI_URL" >/dev/null 2>&1 &
+  elif command -v chromium >/dev/null 2>&1; then
+    chromium --new-window "$UI_URL" >/dev/null 2>&1 &
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$UI_URL" >/dev/null 2>&1 &
+  else
+    printf '%s\n' "$UI_URL"
+  fi
+}
+
+if command -v curl >/dev/null 2>&1; then
+  if curl -fsS --max-time 1 "$UI_URL" >/dev/null 2>&1; then
+    open_url
+    exit 0
+  fi
+fi
+
 exec python3 "$SCRIPT_DIR/web_jumper.py" "$@"
