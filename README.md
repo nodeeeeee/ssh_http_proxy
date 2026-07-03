@@ -10,6 +10,16 @@ A small browser-based desktop helper for opening a local SOCKS5 proxy through an
 
 The launcher starts a local Web UI and opens it in your browser.
 
+## Desktop Launcher
+
+Install an application-menu entry:
+
+```sh
+./install-desktop-entry
+```
+
+After that, launch `SSH HTTP Proxy` from your desktop environment's application menu.
+
 The app opens a local Web UI at:
 
 ```text
