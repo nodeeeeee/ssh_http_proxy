@@ -25,6 +25,7 @@ state_lock = threading.RLock()
 tunnel_proc = None
 tunnel_host = None
 tunnel_port = None
+tunnel_pid = None
 logs = []
 
 
@@ -175,19 +176,107 @@ def safe_profile_name(host, port):
     return f"{name or 'host'}-{port}"
 
 
+def list_existing_tunnels():
+    result = subprocess.run(
+        ["ps", "-eo", "pid=,args="],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    tunnels = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line or " -D " not in line or "ssh " not in line:
+            continue
+        try:
+            pid_text, args_text = line.split(None, 1)
+            pid = int(pid_text)
+            args = shlex.split(args_text)
+        except (ValueError, IndexError):
+            continue
+        if not args or Path(args[0]).name != "ssh":
+            continue
+        local_port = None
+        destination = None
+        idx = 1
+        while idx < len(args):
+            arg = args[idx]
+            if arg == "-D" and idx + 1 < len(args):
+                local_port = args[idx + 1]
+                idx += 2
+                continue
+            if arg.startswith("-D") and len(arg) > 2:
+                local_port = arg[2:]
+                idx += 1
+                continue
+            if arg == "-o" and idx + 1 < len(args):
+                idx += 2
+                continue
+            if arg.startswith("-"):
+                idx += 1
+                continue
+            destination = arg
+            idx += 1
+        if not local_port:
+            continue
+        port_part = local_port.rsplit(":", 1)[-1]
+        try:
+            port = int(port_part)
+        except ValueError:
+            continue
+        tunnels.append({"pid": pid, "port": port, "host": destination, "args": args_text})
+    return tunnels
+
+
+def find_existing_tunnel(host=None, port=None):
+    for tunnel in list_existing_tunnels():
+        if port is not None and tunnel["port"] != port:
+            continue
+        if host is not None and tunnel.get("host") != host:
+            continue
+        return tunnel
+    return None
+
+
+def adopt_existing_tunnel(tunnel):
+    global tunnel_proc, tunnel_host, tunnel_port, tunnel_pid
+    with state_lock:
+        tunnel_proc = None
+        tunnel_host = tunnel.get("host") or "existing tunnel"
+        tunnel_port = tunnel["port"]
+        tunnel_pid = tunnel["pid"]
+    add_log(f"Reusing existing SSH tunnel pid {tunnel['pid']} on 127.0.0.1:{tunnel['port']} via {tunnel_host}.")
+
+
 def process_status():
-    global tunnel_proc, tunnel_host, tunnel_port
+    global tunnel_proc, tunnel_host, tunnel_port, tunnel_pid
     with state_lock:
         if tunnel_proc and tunnel_proc.poll() is not None:
             add_log(f"Tunnel process exited with code {tunnel_proc.returncode}.")
             tunnel_proc = None
             tunnel_host = None
             tunnel_port = None
-        running = bool(tunnel_proc and tunnel_proc.poll() is None)
+            tunnel_pid = None
+        if tunnel_proc and tunnel_proc.poll() is None:
+            running = True
+            tunnel_pid = tunnel_proc.pid
+        elif tunnel_port and not port_is_free("127.0.0.1", tunnel_port):
+            existing = find_existing_tunnel(tunnel_host, tunnel_port) or find_existing_tunnel(port=tunnel_port)
+            running = bool(existing)
+            if existing:
+                tunnel_host = existing.get("host") or tunnel_host
+                tunnel_pid = existing["pid"]
+        else:
+            running = False
+            tunnel_host = None
+            tunnel_port = None
+            tunnel_pid = None
         return {
             "running": running,
             "host": tunnel_host,
             "port": tunnel_port,
+            "pid": tunnel_pid,
             "status": f"Tunnel running on 127.0.0.1:{tunnel_port}" if running else "Idle",
             "proxy": f"socks5://127.0.0.1:{tunnel_port}" if running else None,
             "suggestedPort": first_free_port() or 1080,
@@ -205,10 +294,23 @@ def read_stream(stream_name, stream):
 
 
 def start_tunnel(host, port):
-    global tunnel_proc, tunnel_host, tunnel_port
+    global tunnel_proc, tunnel_host, tunnel_port, tunnel_pid
     with state_lock:
         if tunnel_proc and tunnel_proc.poll() is None:
-            raise RuntimeError("A tunnel is already running.")
+            if tunnel_host == host and tunnel_port == port:
+                add_log(f"Tunnel already running on 127.0.0.1:{port} via {host}; reusing it.")
+                return process_status()
+            raise RuntimeError(f"A tunnel is already running on 127.0.0.1:{tunnel_port} via {tunnel_host}. Stop it first.")
+        existing = find_existing_tunnel(host, port)
+        if existing:
+            adopt_existing_tunnel(existing)
+            return process_status()
+        existing_on_port = find_existing_tunnel(port=port)
+        if existing_on_port:
+            raise RuntimeError(
+                f"127.0.0.1:{port} is already used by SSH tunnel pid {existing_on_port['pid']} "
+                f"for {existing_on_port.get('host') or 'unknown host'}."
+            )
         if not port_is_free("127.0.0.1", port):
             raise RuntimeError(f"127.0.0.1:{port} is already in use.")
         cmd = [
@@ -237,6 +339,7 @@ def start_tunnel(host, port):
         tunnel_proc = proc
         tunnel_host = host
         tunnel_port = port
+        tunnel_pid = proc.pid
         threading.Thread(target=read_stream, args=("stdout", proc.stdout), daemon=True).start()
         threading.Thread(target=read_stream, args=("stderr", proc.stderr), daemon=True).start()
 
@@ -250,34 +353,43 @@ def start_tunnel(host, port):
             tunnel_proc = None
             tunnel_host = None
             tunnel_port = None
+            tunnel_pid = None
         raise RuntimeError(f"Tunnel failed before the local port became ready. Exit code {code}.")
     add_log("Tunnel process is running, but the local port was not ready within 5 seconds.")
     return process_status()
 
 
 def stop_tunnel():
-    global tunnel_proc, tunnel_host, tunnel_port
+    global tunnel_proc, tunnel_host, tunnel_port, tunnel_pid
     with state_lock:
         proc = tunnel_proc
-    if not proc:
+        pid = tunnel_pid
+    if not proc and not pid:
         return process_status()
     add_log("Stopping tunnel.")
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except OSError:
-        proc.terminate()
-    try:
-        proc.wait(timeout=4)
-    except subprocess.TimeoutExpired:
-        add_log("Tunnel did not stop after SIGTERM; killing it.")
+    if proc:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)
+            os.killpg(proc.pid, signal.SIGTERM)
         except OSError:
-            proc.kill()
+            proc.terminate()
+        try:
+            proc.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            add_log("Tunnel did not stop after SIGTERM; killing it.")
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                proc.kill()
+    elif pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
     with state_lock:
         tunnel_proc = None
         tunnel_host = None
         tunnel_port = None
+        tunnel_pid = None
     add_log("Tunnel stopped.")
     return process_status()
 
